@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDF to Excel Extractor</title>
+    <meta name="description" content="Extract tables from PDF files into clean, formatted Excel workbooks. Split by any column, add a summary sheet. Runs entirely in your browser." />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F3A5F'/%3E%3Cpath d='M9 10h14M9 16h14M9 22h9' stroke='%235EEAD4' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="wrap top-inner">
+        <span class="brand"><span class="logo" aria-hidden="true"></span>PDF&nbsp;→&nbsp;Excel</span>
+        <span class="privacy"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6z"/></svg>Files never leave your browser</span>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="hero">
+        <h1>Turn PDF tables into clean Excel files</h1>
+        <p>Drop in reports, registers or order lists. The tool finds the table on every page, removes repeated headers and page footers, and gives you a formatted workbook, split into sheets by any column you choose, with a summary sheet.</p>
+      </section>
+
+      <section class="drop" id="drop">
+        <input type="file" id="file" accept="application/pdf" multiple hidden />
+        <svg class="drop-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7 9l5-5 5 5M5 15v4h14v-4"/></svg>
+        <p class="drop-title">Drop PDF files here</p>
+        <p class="drop-sub">or</p>
+        <button type="button" class="btn primary" id="pick">Choose PDFs</button>
+        <div class="samples">
+          <span>No PDF at hand? Try a sample:</span>
+          <button type="button" class="link" data-sample="membership-register.pdf">Membership register (3 pages)</button>
+          <button type="button" class="link" data-sample="store-orders-q3.pdf">Store orders Q3 (5 pages)</button>
+        </div>
+      </section>
+
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+
+      <section class="result" id="result" hidden>
+        <div class="stats" id="stats"></div>
+
+        <div class="options">
+          <label class="field">
+            <span>Split into sheets by</span>
+            <select id="split"></select>
+          </label>
+          <label class="check"><input type="checkbox" id="summary" checked /> Summary sheet with counts and totals</label>
+          <label class="check"><input type="checkbox" id="source" /> Add source file and page columns</label>
+          <div class="actions">
+            <button type="button" class="btn primary" id="xlsx">Download Excel</button>
+            <button type="button" class="btn" id="csv">Download CSV</button>
+          </div>
+        </div>
+
+        <div class="preview-head">
+          <h2>Preview</h2>
+          <span id="preview-note"></span>
+        </div>
+        <div class="table-box" tabindex="0" aria-label="Extracted table preview">
+          <table id="preview"></table>
+        </div>
+      </section>
+
+      <section class="how">
+        <div><h3>1. Read</h3><p>Text and positions are read from each page with PDF.js, locally on your device.</p></div>
+        <div><h3>2. Rebuild</h3><p>Rows and columns are rebuilt from the layout; titles, page numbers and repeated headers are dropped.</p></div>
+        <div><h3>3. Export</h3><p>A styled workbook: frozen header, filters, number formats, one sheet per group and a summary.</p></div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <div class="wrap">
+        Built by <a href="https://ozenyunus35.github.io/yunus-ozen-portfolio/">Yunus Ozen</a>. Need extraction tuned to your own documents, scanned PDFs or a recurring workflow? That is the kind of work I do.
+        · <a href="https://github.com/ozenyunus35/pdf-data-extractor">Source on GitHub</a>
+      </div>
+    </footer>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

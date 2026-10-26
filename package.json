@@ -1,0 +1,22 @@
+{
+  "name": "pdf-data-extractor",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Extract tables from PDFs into clean Excel workbooks, entirely in the browser.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "node --experimental-strip-types tests/extract.test.ts"
+  },
+  "dependencies": {
+    "exceljs": "4.4.0",
+    "pdfjs-dist": "4.10.38"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vite": "6.4.5"
+  },
+  "license": "MIT"
+}
