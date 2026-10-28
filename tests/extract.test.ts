@@ -27,6 +27,10 @@ assert.ok(m.rows.every((r) => r.every((c) => c !== "")), "no empty cells");
 assert.ok(m.rows.every((r, i) => r[0] === String(i + 1)), "row numbers in order across pages");
 assert.deepEqual(splitCandidates(m).map((c) => m.headers[c.index]), ["Branch", "Status"]);
 assert.deepEqual(numericColumns(m), []);
+// The layout marks one "row" line per extracted row and keeps the header on every page.
+assert.equal(m.layout!.lines.filter((l) => l.kind === "row").length, m.rows.length, "layout rows");
+assert.equal(new Set(m.layout!.lines.filter((l) => l.kind === "header").map((l) => l.page)).size, 3, "header found on each page");
+assert.ok(m.layout!.lines.some((l) => l.kind === "skipped"), "titles and footers are marked as skipped");
 
 const o = extractTable(await load("public/samples/store-orders-q3.pdf"))!;
 assert.deepEqual(o.headers, ["Order", "Date", "Store", "Product", "Qty", "Unit Price", "Total"]);

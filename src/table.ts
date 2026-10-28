@@ -18,6 +18,13 @@ export interface Table {
   headers: string[];
   rows: string[][];
   source: { page: number }[];
+  /** Where things were found, for drawing the detection overlay. PDF units. */
+  layout?: Layout;
+}
+
+export interface Layout {
+  columns: [number, number][];
+  lines: { page: number; y: number; h: number; x0: number; x1: number; kind: "header" | "row" | "skipped" }[];
 }
 
 interface Word {
@@ -28,6 +35,7 @@ interface Word {
 
 interface Line {
   y: number;
+  h: number;
   words: Word[];
 }
 
@@ -54,7 +62,7 @@ export function toLines(items: TextItem[]): Line[] {
     if (line) line.words.push(w);
     else lines.push({ y: w.y, h: w.h, words: [w] });
   }
-  return lines.sort((a, b) => b.y - a.y).map((l) => ({ y: l.y, words: l.words.sort((a, b) => a.x0 - b.x0) }));
+  return lines.sort((a, b) => b.y - a.y).map((l) => ({ y: l.y, h: l.h, words: l.words.sort((a, b) => a.x0 - b.x0) }));
 }
 
 /** Columns are the x ranges covered by text, split by strips covered by at most `limit` lines. */
@@ -159,24 +167,36 @@ export function extractTable(pages: PageText[]): Table | null {
   // footers and repeated headers fall between the columns and are skipped.
   const rows: string[][] = [];
   const source: { page: number }[] = [];
+  const marks: (Layout["lines"][number] & { row?: number })[] = [];
   let header: string[] | null = null;
   pageLines.forEach((lines, idx) => {
+    const page = pages[idx].page;
+    const mark = (line: Line, kind: Layout["lines"][number]["kind"], row?: number) =>
+      marks.push({ page, y: line.y, h: line.h, x0: line.words[0].x0, x1: line.words[line.words.length - 1].x1, kind, row });
     lines.forEach((line, i) => {
-      if (!onGrid(line, cols)) return;
-      const cells = rowOf(line, cols);
-      if (cells.filter(Boolean).length < minFilled) return;
+      const cells = onGrid(line, cols) ? rowOf(line, cols) : null;
+      if (!cells || cells.filter(Boolean).length < minFilled) {
+        if (marks.at(-1)?.y !== line.y || marks.at(-1)?.page !== page) mark(line, "skipped");
+        return;
+      }
       if (!header) {
         // The header is the first grid line if it has no numbers, otherwise the
         // line right above it (header labels are often wider than the data).
         const above = lines[i - 1];
         if (!cells.some((c) => /\d/.test(c))) {
           header = cells;
+          mark(line, "header");
           return;
         }
-        header = above && above.words.length >= minFilled ? rowOf(above, cols) : cols.map((_, k) => `Column ${k + 1}`);
+        if (above && above.words.length >= minFilled) {
+          header = rowOf(above, cols);
+          const last = marks.at(-1);
+          if (last && last.page === page && last.y === above.y) last.kind = "header";
+        } else header = cols.map((_, k) => `Column ${k + 1}`);
       }
+      mark(line, "row", rows.length);
       rows.push(cells);
-      source.push({ page: pages[idx].page });
+      source.push({ page });
     });
   });
   if (!header || rows.length < 1) return null;
@@ -184,7 +204,9 @@ export function extractTable(pages: PageText[]): Table | null {
   // A header repeated on every page can still slip through as a row.
   const key = headers.map(norm).join("|");
   const keep = rows.map((r, k) => (r.map(norm).join("|") === key ? -1 : k)).filter((k) => k >= 0);
-  return { headers, rows: keep.map((k) => rows[k]), source: keep.map((k) => source[k]) };
+  const repeated = new Set(rows.map((_, k) => k).filter((k) => !keep.includes(k)));
+  const lines = marks.map(({ row, ...m }) => (row !== undefined && repeated.has(row) ? { ...m, kind: "header" as const } : m));
+  return { headers, rows: keep.map((k) => rows[k]), source: keep.map((k) => source[k]), layout: { columns: cols, lines } };
 }
 
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
