@@ -49,4 +49,28 @@ assert.deepEqual(numericColumns(inv).map((i) => inv.headers[i]), ["Amount (USD)"
 // A letter has no table at all.
 assert.equal(extractTable(await load("tests/fixtures/no-table.pdf")), null);
 
+// Real-world layouts: a table between a key/value box and a footnote, with
+// right-aligned numbers, a header label wrapped onto two lines and long
+// descriptions wrapped onto several lines.
+const st = extractTable(await load("tests/fixtures/bank-statement.pdf"))!;
+assert.deepEqual(st.headers, ["Date", "Receipt No", "Description", "Amount", "Balance"]);
+assert.equal(st.rows.length, 9, "statement rows");
+assert.ok(st.rows[4][2].endsWith("RECONCILIATION: 0971963"), "wrapped description joined");
+assert.deepEqual(st.rows[0], ["20.10.2026", "F24311", "MESSAGE FEE AMOUNT", "-0,37", "0,00"]);
+
+// An invoice: the line items, not the address block or the totals box.
+const de = extractTable(await load("tests/fixtures/invoice-de.pdf"))!;
+assert.deepEqual(de.headers, ["BESCHREIBUNG", "MENGE", "EINZELPREIS", "BETRAG"]);
+assert.equal(de.rows.length, 3, "invoice line items");
+
+// A report: a title and a paragraph above the table, notes wrapping inside cells.
+const rep = extractTable(await load("tests/fixtures/report-wrapped.pdf"))!;
+assert.deepEqual(rep.headers, ["Vendor", "Category", "Spend (USD)", "Score", "Notes"]);
+assert.equal(rep.rows.length, 5, "report rows");
+assert.equal(rep.rows[0][0], "Halcyon Cloud Inc.");
+assert.ok(rep.rows[0][4].endsWith("after the September escalation."), "wrapped note joined");
+
+// A scan has no text layer, so there is nothing to read.
+assert.equal(extractTable(await load("tests/fixtures/scanned.pdf")), null);
+
 console.log("all extraction tests passed");

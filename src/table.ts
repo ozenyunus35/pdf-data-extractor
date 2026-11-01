@@ -153,10 +153,109 @@ function mergeContinuations(lines: Line[], cols: [number, number][], fontSize: n
   return out;
 }
 
+/** Cells of a line: runs of words separated by a gap wider than normal word spacing. */
+function cellsOf(l: Line, fontSize: number): [number, number][] {
+  const cells: [number, number][] = [[l.words[0].x0, l.words[0].x1]];
+  for (let i = 1; i < l.words.length; i++) {
+    if (l.words[i].x0 - l.words[i - 1].x1 > fontSize * 0.6) cells.push([l.words[i].x0, l.words[i].x1]);
+    else cells[cells.length - 1][1] = l.words[i].x1;
+  }
+  return cells;
+}
+
+/**
+ * Splits the document into blocks that could each hold one table. A block
+ * ends at running prose (one long cell of many words), at a large vertical gap,
+ * or where the cells stop lining up with the rows above (a key/value box above
+ * a table, a totals box below it). Cells line up by their left edge, or with
+ * `edges: "either"` also by their right edge, as right-aligned numbers do. Page breaks do not end a block, so tables continue across pages.
+ */
+function blocks(pageLines: Line[][], fontSize: number, edges: "left" | "either"): Line[][][] {
+  const width = Math.max(1, ...pageLines.flat().map((l) => l.words.at(-1)!.x1 - l.words[0].x0));
+  const out: Line[][][] = [];
+  let current: Line[][] = pageLines.map(() => []);
+  let recent: [number, number][][] = [];
+  let prevY: number | null = null;
+  let lastGap: number | null = null;
+  const flush = () => {
+    // Titles above a table and notes below it are single cells that would bridge the gutters.
+    const all = current.flat();
+    let first = all.findIndex((l) => cellsOf(l, fontSize).length >= 2);
+    // …but keep a short label right above the first row: the top half of a wrapped header.
+    if (first > 0 && all[first - 1].words.length <= 3 && all[first - 1].y - all[first].y < all[first].h * 1.8) first--;
+    let last = all.length - 1;
+    while (first >= 0 && last > first && cellsOf(all[last], fontSize).length < 2 && all[last - 1].y - all[last].y > all[last].h * 1.8) last--;
+    const keep = new Set(first === -1 ? [] : all.slice(first, last + 1));
+    current = current.map((ls) => ls.filter((l) => keep.has(l)));
+    if (current.flat().length >= 2) out.push(current);
+    current = pageLines.map(() => []);
+    recent = [];
+    prevY = null;
+    lastGap = null;
+  };
+  pageLines.forEach((lines, p) => {
+    prevY = null;
+    lastGap = null;
+    for (const l of lines) {
+      const cells = cellsOf(l, fontSize);
+      const prose = cells.length === 1 && l.words.length >= 6 && l.words.at(-1)!.x1 - l.words[0].x0 > width * 0.45;
+      if (prose) {
+        flush();
+        continue;
+      }
+      const gap = prevY === null ? 0 : prevY - l.y;
+      // Rows can be widely spaced; what ends a table is a gap clearly larger than its own rhythm.
+      const unusual = lastGap === null ? gap > fontSize * 3.2 : gap > fontSize * 2 && gap > lastGap * 1.7;
+      // A cell lines up with the rows above when its left or right edge does (text or numbers).
+      const multi = recent.filter((r) => r.length >= 2);
+      const tol = fontSize * 0.5;
+      const aligned = ([a, b]: [number, number]) => multi.some((r) => r.some(([c, d]) => Math.abs(a - c) <= tol || (edges === "either" && Math.abs(b - d) <= tol)));
+      const matched = cells.filter(aligned).length;
+      const shifted = cells.length >= 2 && (edges === "either" ? multi.length >= 1 && matched < cells.length * 0.75 : multi.length >= 2 && matched < Math.ceil(cells.length / 2));
+      if (unusual || shifted) {
+        // A short label hugging this line is the top half of its wrapped header: take it along.
+        const label = current[p].at(-1);
+        const carry = shifted && label && label.words.length <= 3 && cellsOf(label, fontSize).length === 1 && label.y - l.y < l.h * 1.8;
+        if (carry) current[p].pop();
+        flush();
+        if (carry) current[p].push(label);
+      }
+      current[p].push(l);
+      recent = [...recent.slice(-3), cells];
+      lastGap = prevY === null ? null : gap;
+      prevY = l.y;
+    }
+  });
+  flush();
+  return out;
+}
+
+const score = (t: Table) => {
+  const numeric = numericColumns(t).length > 0 ? 1.5 : 1;
+  const named = t.headers.some((h) => !/^Column \d+$/.test(h)) ? 2 : 1;
+  const filled = t.rows.flat().filter(Boolean).length / Math.max(1, t.rows.flat().length);
+  return t.rows.length * t.headers.length * numeric * named * filled;
+};
+
+/**
+ * Finds the main table: every block is read on its own and the whole document
+ * as one, and the most table-like result wins (rows × columns, a named header,
+ * numeric columns and filled cells all count).
+ */
 export function extractTable(pages: PageText[]): Table | null {
   const pageLines = pages.map((p) => toLines(p.items));
   const heights = pages.flatMap((p) => p.items.filter((i) => i.str.trim() && i.height > 0).map((i) => i.height)).sort((a, b) => a - b);
   const fontSize = heights[Math.floor(heights.length / 2)] || 10;
+  // Left-aligned text tables and right-aligned number columns split best in different ways: try both.
+  const candidates = [pageLines, ...blocks(pageLines, fontSize, "left"), ...blocks(pageLines, fontSize, "either")]
+    .map((ls) => tableFrom(ls, pages, fontSize))
+    .filter((t): t is Table => t !== null && t.rows.length >= 2);
+  if (!candidates.length) return null;
+  return candidates.reduce((best, t) => (score(t) > score(best) ? t : best));
+}
+
+/** Reads one table from the given lines (one array per page) with gutter-based columns. */
+function tableFrom(pageLines: Line[][], pages: PageText[], fontSize: number): Table | null {
   const raw = findColumns(pageLines.flat());
   if (raw.length < 2) return null;
   const cols = mergeContinuations(pageLines.flat(), raw, fontSize);
@@ -169,12 +268,25 @@ export function extractTable(pages: PageText[]): Table | null {
   const source: { page: number }[] = [];
   const marks: (Layout["lines"][number] & { row?: number })[] = [];
   let header: string[] | null = null;
+  let skipHeaderTail: Line | undefined;
   pageLines.forEach((lines, idx) => {
     const page = pages[idx].page;
     const mark = (line: Line, kind: Layout["lines"][number]["kind"], row?: number) =>
       marks.push({ page, y: line.y, h: line.h, x0: line.words[0].x0, x1: line.words[line.words.length - 1].x1, kind, row });
     lines.forEach((line, i) => {
+      if (line === skipHeaderTail) {
+        mark(line, "header");
+        return;
+      }
       const cells = onGrid(line, cols) ? rowOf(line, cols) : null;
+      // A wrapped cell ("…improved after the" / "September escalation.") continues the row above.
+      const prev = lines[i - 1];
+      const lastRow = rows.at(-1);
+      if (cells && lastRow && header && prev && marks.at(-1)?.kind === "row" && marks.at(-1)?.y === prev.y && prev.y - line.y < line.h * 1.8 && cells.filter(Boolean).length < minFilled && cells.every((c, k) => !c || lastRow[k])) {
+        cells.forEach((c, k) => c && (lastRow[k] = `${lastRow[k]} ${c}`));
+        mark(line, "row", rows.length - 1);
+        return;
+      }
       if (!cells || cells.filter(Boolean).length < minFilled) {
         if (marks.at(-1)?.y !== line.y || marks.at(-1)?.page !== page) mark(line, "skipped");
         return;
@@ -184,7 +296,16 @@ export function extractTable(pages: PageText[]): Table | null {
         // line right above it (header labels are often wider than the data).
         const above = lines[i - 1];
         if (!cells.some((c) => /\d/.test(c))) {
+          // Header labels can wrap ("Receipt" / "No"): fold label-only lines right above and below into the header.
+          const labelLine = (l: Line | undefined) => l && Math.abs(l.y - line.y) < line.h * 1.8 && onGrid(l, cols) && !l.words.some((w) => /\d/.test(w.text)) && l.words.length <= cols.length;
+          const above = lines[i - 1];
+          const below = lines[i + 1];
           header = cells;
+          if (labelLine(above)) header = rowOf(above, cols).map((c, k) => [c, header![k]].filter(Boolean).join(" "));
+          if (labelLine(below)) {
+            header = header.map((c, k) => [c, rowOf(below, cols)[k]].filter(Boolean).join(" "));
+            skipHeaderTail = below;
+          }
           mark(line, "header");
           return;
         }

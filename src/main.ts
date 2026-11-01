@@ -94,7 +94,8 @@ async function handle(list: File[]) {
       const entry: Loaded = { name: file.name, data: buf, pages: text.length, rows: 0, layout: t?.layout };
       loaded.push(entry);
       if (!t || t.rows.length === 0) {
-        entry.skipped = "no table found";
+        // No selectable text at all means a scan or a photo saved as PDF.
+        entry.skipped = text.every((p) => !p.items.some((i) => i.str.trim())) ? "scanned image, no text layer" : "no table found";
         continue;
       }
       if (merged.headers.length && t.headers.join("|") !== merged.headers.join("|")) {
@@ -116,7 +117,13 @@ async function handle(list: File[]) {
   renderFiles();
   if (!merged.rows.length) {
     setStep(null);
-    setStatus("No table was found. This works with digital PDFs whose text can be selected. Scanned PDFs need OCR first.", true);
+    const scanned = loaded.length > 0 && loaded.every((f) => f.skipped === "scanned image, no text layer");
+    setStatus(
+      scanned
+        ? "This PDF is a scanned image with no selectable text, so there is no table to read. For scans and photos, try Tally, which runs OCR in the browser: ozenyunus35.github.io/invoice-extractor"
+        : "No table was found. This works with digital PDFs whose text can be selected, and reads the largest table in the file.",
+      true,
+    );
     return;
   }
 
