@@ -1,6 +1,6 @@
 // Cell values as reports print them: numbers in several locales, signs, units and dates.
 import assert from "node:assert/strict";
-import { decimalOf, toDate, toNumber, type Decimal } from "../src/values.ts";
+import { dateOrderOf, decimalOf, toDate, toNumber, type Decimal } from "../src/values.ts";
 
 const numbers: [string, Decimal, number | null][] = [
   ["1,234.50", ".", 1234.5], ["1.234,50", ",", 1234.5], ["229 402,18", ",", 229402.18], ["6.497,76 €", ",", 6497.76],
@@ -19,6 +19,10 @@ const dates: [string, "dmy" | "mdy", [number, number, number] | null][] = [
 ];
 for (const [s, o, want] of dates) assert.deepEqual(toDate(s, o), want, `${s} (${o})`);
 
+assert.equal(dateOrderOf(["03/14/2026", "04/01/2026"]), "mdy");
+assert.equal(dateOrderOf(["14/03/2026", "04/01/2026"]), "dmy");
+assert.equal(dateOrderOf(["03/04/2026", "05/06/2026"]), null, "no part above 12: unknown");
+assert.equal(dateOrderOf(["14.03.2026"]), "dmy");
 assert.equal(decimalOf(["1.234,56", "0,37", "12"]), ",");
 assert.equal(decimalOf(["1,234.56", "7"]), ".");
 console.log("all value tests passed");

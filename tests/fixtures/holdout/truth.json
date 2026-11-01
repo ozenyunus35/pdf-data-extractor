@@ -1,0 +1,177 @@
+[
+ {
+  "name": "bordered-grid",
+  "expect": {
+   "headers": [
+    "Employee",
+    "Name",
+    "Dept",
+    "Paid on",
+    "Gross"
+   ],
+   "rows": 25,
+   "numeric": [
+    "Gross"
+   ],
+   "kind": [
+    3,
+    "date"
+   ]
+  }
+ },
+ {
+  "name": "tight-text",
+  "expect": {
+   "headers": [
+    "Name",
+    "Country",
+    "Status",
+    "City"
+   ],
+   "rows": 20
+  }
+ },
+ {
+  "name": "debit-credit",
+  "expect": {
+   "headers": [
+    "Date",
+    "Description",
+    "Paid out",
+    "Paid in",
+    "Balance"
+   ],
+   "rows": 28,
+   "numeric": [
+    "Paid out",
+    "Paid in",
+    "Balance"
+   ],
+   "kind": [
+    0,
+    "date"
+   ]
+  }
+ },
+ {
+  "name": "ambiguous-dates",
+  "expect": {
+   "headers": [
+    "Date",
+    "Event",
+    "Order ref"
+   ],
+   "rows": 10,
+   "ambiguous": true
+  }
+ },
+ {
+  "name": "es-invoice",
+  "expect": {
+   "headers": [
+    "Descripción",
+    "Cant.",
+    "Precio unitario",
+    "Importe"
+   ],
+   "rows": 6,
+   "numeric": [
+    "Cant.",
+    "Precio unitario",
+    "Importe"
+   ]
+  }
+ },
+ {
+  "name": "grouped-blank",
+  "expect": {
+   "headers": [
+    "Region",
+    "Product",
+    "Units",
+    "Revenue"
+   ],
+   "rows": 15,
+   "numeric": [
+    "Units",
+    "Revenue"
+   ]
+  }
+ },
+ {
+  "name": "total-names",
+  "expect": {
+   "headers": [
+    "Code",
+    "Product",
+    "Stock",
+    "Price"
+   ],
+   "rows": 8
+  }
+ },
+ {
+  "name": "running-headers",
+  "expect": {
+   "headers": [
+    "Line",
+    "Item",
+    "Location",
+    "Count"
+   ],
+   "rows": 160
+  },
+  "headerTemplate": "<div style=\"font-size:8px;width:100%;padding:0 20mm\">ACME Corp · Confidential · Internal use only</div>",
+  "footerTemplate": "<div style=\"font-size:8px;width:100%;padding:0 20mm\">Printed 01.11.2026 by J. Smith<span style=\"float:right\">Seite <span class=\"pageNumber\"></span> von <span class=\"totalPages\"></span></span></div>"
+ },
+ {
+  "name": "tiny",
+  "expect": {
+   "headers": [
+    "Item",
+    "Qty",
+    "Amount"
+   ],
+   "rows": 2,
+   "numeric": [
+    "Qty",
+    "Amount"
+   ]
+  }
+ },
+ {
+  "name": "it-eur-prefix",
+  "expect": {
+   "headers": [
+    "Filiale",
+    "Fatturato",
+    "Variazione"
+   ],
+   "rows": 15,
+   "numeric": [
+    "Fatturato",
+    "Variazione"
+   ]
+  }
+ },
+ {
+  "name": "wrapped-narrow",
+  "expect": {
+   "headers": [
+    "Date",
+    "Description",
+    "Amount"
+   ],
+   "rows": 12,
+   "numeric": [
+    "Amount"
+   ]
+  }
+ },
+ {
+  "name": "no-table-kv",
+  "expect": {
+   "none": true
+  }
+ }
+]

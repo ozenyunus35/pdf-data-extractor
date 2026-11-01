@@ -93,14 +93,20 @@ export function toDate(s: string, order: DateOrder = "dmy"): [number, number, nu
   return null;
 }
 
-/** Slashed dates are month-first only when a column shows a month above 12 in the first place. */
-export function dateOrderOf(values: string[]): DateOrder {
-  let dmy = 0, mdy = 0;
+/**
+ * Day-first or month-first for slashed dates, from a part above 12 (14/03 or 03/14).
+ * Null when the column has slashed dates and none of them settles it: 03/04/2026 is
+ * 3 April or 4 March, and guessing would put a wrong date in the spreadsheet.
+ */
+export function dateOrderOf(values: string[]): DateOrder | null {
+  let dmy = 0, mdy = 0, slashed = 0;
   for (const v of values) {
     const m = v.trim().match(/^(\d{1,2})\/(\d{1,2})\/\d{2,4}$/);
     if (!m) continue;
+    slashed++;
     if (+m[1] > 12) dmy++;
     if (+m[2] > 12) mdy++;
   }
-  return mdy > dmy ? "mdy" : "dmy";
+  if (!slashed) return "dmy";
+  return dmy === mdy ? null : mdy > dmy ? "mdy" : "dmy";
 }

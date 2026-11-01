@@ -90,6 +90,10 @@ export function toLines(items: TextItem[]): Line[] {
       if (last && w.x0 - last.x1 < l.h * 0.12 && w.x0 >= last.x0) {
         last.text += w.text;
         last.x1 = Math.max(last.x1, w.x1);
+      } else if (last && w.x0 - last.x1 < l.h * 0.7 && w.x0 >= last.x0 && joinsNumber(last.text, w.text)) {
+        // Monospaced text arrives word by word: "81" "189,70" one space apart is still one number.
+        last.text += ` ${w.text}`;
+        last.x1 = Math.max(last.x1, w.x1);
       } else merged.push({ ...w });
     }
     return { y: l.y, h: l.h, words: merged };
@@ -133,12 +137,17 @@ export const crosses = (l: Line, cols: [number, number][]) =>
  * first, then the gutters are recomputed strictly from the remaining rows.
  */
 export function findColumns(lines: Line[]): [number, number][] {
-  let rows = lines.filter((l) => l.words.length >= 2);
+  // Titles set larger than the body never say where columns are.
+  const hs = lines.map((l) => l.h).sort((a, b) => a - b);
+  const body = hs[Math.floor(hs.length / 2)] ?? 0;
+  let rows = lines.filter((l) => l.words.length >= 2 && l.h <= body * 1.3);
   if (rows.length < 3) return [];
   for (let pass = 0; pass < 3; pass++) {
     const loose = columnsFrom(rows, Math.floor(rows.length * 0.05));
     // Titles and notes either bridge a gutter or sit in one where no row writes.
-    const keep = rows.filter((l) => !crosses(l, loose) && !(loose.length && l.words.some((w) => !loose.some(([a, b]) => w.x0 < b + 1 && w.x1 > a - 1))));
+    // A sentence (one run of words, no cell gaps) reaching into a gutter is a title or note, not a row.
+    const inGutter = (w: Word) => !loose.some(([a, b]) => w.x0 >= a - 1 && w.x1 <= b + 1);
+    const keep = rows.filter((l) => !crosses(l, loose) && !(loose.length && l.words.some((w) => !loose.some(([a, b]) => w.x0 < b + 1 && w.x1 > a - 1))) && !(loose.length && cellsOf(l, l.h).length < 2 && l.words.some(inGutter)));
     if (keep.length === rows.length || keep.length < rows.length * 0.6) break;
     rows = keep;
   }
@@ -183,7 +192,9 @@ function mergeContinuations(lines: Line[], cols: [number, number][], fontSize: n
     const uses = grid.filter((l) => filled(l, cols[j]));
     const sparse = uses.length < grid.length * 0.6;
     const alwaysAfterPrev = uses.every((l) => filled(l, prev));
-    if (gap < fontSize * 0.5 && sparse && alwaysAfterPrev) prev[1] = cols[j][1];
+    // The tail of one value is written in the same run as its start, one space after it.
+    const tail = uses.length > 0 && uses.every((l) => l.words.find((w) => (w.x0 + w.x1) / 2 >= cols[j][0] - 1.5)?.glued);
+    if ((gap < fontSize * 0.5 || tail) && sparse && alwaysAfterPrev) prev[1] = cols[j][1];
     else out.push([...cols[j]] as [number, number]);
   }
   return out;
@@ -204,7 +215,10 @@ function foldColumns(lines: Line[], cols: [number, number][], fontSize: number):
     const units = grid.map((l) => wordsIn(l, cols[j])).filter((ws) => ws.length);
     const unitColumn = units.length >= 2 && units.every((ws) => ws.length === 1 && isUnit(ws[0].text)) && cols[j][0] - prev[1] < fontSize * 1.2;
     // pdf.js can run neighbouring cells into one text run ("6,568.83 Paid"), so only text next to text counts.
-    const wordSpace = both.length >= 3 && both.every((l) => {
+    // Two real columns each carry a label in the header; a value's second word has none above it.
+    const top = grid.find((l) => (wordsIn(l, prev).length || wordsIn(l, cols[j]).length) && !l.words.some((w) => /\d/.test(w.text)));
+    const unlabelled = !!top && wordsIn(top, prev).length > 0 && wordsIn(top, cols[j]).length === 0;
+    const wordSpace = unlabelled && both.length >= 3 && both.every((l) => {
       const [a, b] = [wordsIn(l, prev).at(-1)!, wordsIn(l, cols[j])[0]];
       return (b.glued || b.x0 - a.x1 < fontSize * 0.15) && !isFigure(a.text) && !isFigure(b.text);
     });
@@ -295,7 +309,10 @@ const score = (t: Table) => {
   const numeric = numericColumns(t).length > 0 ? 1.5 : 1;
   const named = t.headers.some((h) => !/^Column \d+$/.test(h)) ? 2 : 1;
   const filled = t.rows.flat().filter(Boolean).length / Math.max(1, t.rows.flat().length);
-  return t.rows.length * t.headers.length * numeric * named * filled;
+  // A key/value box ("Rechnungsnummer:  RE-26-1187") has labels ending in a colon, not a header.
+  const keyValue = t.headers.some((h) => /:$/.test(h.trim())) ? 0.5 : 1;
+  // Columns count for more than rows: two columns of anything line up by chance far more often than four.
+  return t.rows.length * t.headers.length ** 1.5 * numeric * named * filled * keyValue;
 };
 
 /** "Page 3 of 12", "Seite 3 von 12", "Sayfa 3/12", "3 / 12", "- 3 -". */
@@ -310,9 +327,18 @@ function withoutFurniture(pageLines: Line[][]): Line[][] {
   const key = (l: Line) => `${Math.round(l.y / 3)}|${text(l).replace(/\d+/g, "#")}`;
   const seen = new Map<string, number>();
   pageLines.forEach((lines) => new Set(lines.map(key)).forEach((k) => seen.set(k, (seen.get(k) ?? 0) + 1)));
-  const repeated = (l: Line) => pageLines.length >= 3 && (seen.get(key(l)) ?? 0) >= pageLines.length * 0.6;
-  // A table header repeated on every page is not furniture: it lines up with the rows below it.
-  return pageLines.map((lines) => lines.filter((l, i) => !PAGE_NO.test(text(l)) && !(repeated(l) && (i === 0 || i === lines.length - 1) && l.words.length < 3)));
+  const repeated = (l: Line) => pageLines.length >= 2 && (seen.get(key(l)) ?? 0) >= Math.max(2, pageLines.length * 0.6);
+  return pageLines.map((lines) => {
+    const kept = lines.filter((l) => !PAGE_NO.test(text(l)));
+    // Running headers and footers sit in the margins, set apart from the body by more than its line spacing.
+    // A table header repeated on every page is not furniture: the rows follow it at their usual spacing.
+    const gaps = kept.slice(1).map((l, k) => kept[k].y - l.y).sort((a, b) => a - b);
+    const usual = gaps[Math.floor(gaps.length / 2)] ?? 0;
+    const apart = (a: Line, b: Line) => Math.abs(a.y - b.y) > usual * 2;
+    while (kept.length > 2 && repeated(kept[0]) && apart(kept[0], kept[1])) kept.shift();
+    while (kept.length > 2 && repeated(kept.at(-1)!) && apart(kept.at(-1)!, kept.at(-2)!)) kept.pop();
+    return kept;
+  });
 }
 
 /**
@@ -351,6 +377,8 @@ function tableFrom(pageLines: Line[][], pages: PageText[], fontSize: number): Ta
   const cols = foldColumns(pageLines.flat(), mergeContinuations(pageLines.flat(), raw, fontSize), fontSize);
   if (cols.length < 2) return null;
   const minFilled = Math.max(2, Math.ceil(cols.length * 0.6));
+  const heights = pageLines.flat().map((l) => l.h).sort((a, b) => a - b);
+  const bodyHeight = heights[Math.floor(heights.length / 2)];
 
   // Body rows: on the column grid and reasonably filled. Titles, notes, page
   // footers and repeated headers fall between the columns and are skipped.
@@ -359,6 +387,8 @@ function tableFrom(pageLines: Line[][], pages: PageText[], fontSize: number): Ta
   const marks: (Layout["lines"][number] & { row?: number })[] = [];
   let header: string[] | null = null;
   const headerTail = new Set<Line>();
+  let prefix: string[] | null = null;
+  const full = (l: Line | undefined) => !!l && onGrid(l, cols) && l.h <= bodyHeight * 1.3 && rowOf(l, cols).filter(Boolean).length >= minFilled;
   pageLines.forEach((lines, idx) => {
     const page = pages[idx].page;
     const mark = (line: Line, kind: Layout["lines"][number]["kind"], row?: number) =>
@@ -368,12 +398,29 @@ function tableFrom(pageLines: Line[][], pages: PageText[], fontSize: number): Ta
         mark(line, "header");
         return;
       }
-      const cells = onGrid(line, cols) ? rowOf(line, cols) : null;
+      // A title set larger than the table's text is never a row or the header, even when its words fall on the grid.
+      // Above the header, a sentence whose word space happens to fall in a gutter ("Generated for Cedar · de-DE")
+      // is a subtitle, not a row: real cells are not one run of text split by an ordinary space.
+      // Below it, a note running over several columns that way is a sentence; one such join can be pdf.js
+      // running two tight cells together.
+      const sentence = line.words.length >= 6 && line.words.slice(1).every((w) => w.glued) && bridges(line, cols);
+      const cells = onGrid(line, cols) && line.h <= bodyHeight * 1.3 && !sentence && !bridges(line, cols, header ? 2 : 1) ? rowOf(line, cols) : null;
+      // A cell wrapped in a row whose other cells are centred: its first line sits above the row's line, nearer
+      // to it than to the row before, and starts the row's cell.
+      const next = lines[i + 1];
+      const lastMark = marks.at(-1);
+      const above = lastMark?.kind === "row" && lastMark.page === page ? lastMark.y - line.y : Infinity;
+      const below = full(next) ? line.y - next.y : Infinity;
+      if (cells && header && cells.filter(Boolean).length < minFilled && below < above && below < line.h * 1.8 && cells.every((c) => !c || !isFigure(c))) {
+        prefix = prefix ? prefix.map((c, k) => join(c, cells[k])) : cells;
+        mark(line, "row", rows.length);
+        return;
+      }
       // A wrapped cell ("…improved after the" / "September escalation.") continues the row above.
       const prev = lines[i - 1];
       const lastRow = rows.at(-1);
       if (cells && lastRow && header && prev && marks.at(-1)?.kind === "row" && marks.at(-1)?.y === prev.y && prev.y - line.y < line.h * 1.8 && cells.filter(Boolean).length < minFilled && cells.every((c, k) => !c || (lastRow[k] && !isFigure(lastRow[k])))) {
-        cells.forEach((c, k) => c && (lastRow[k] = `${lastRow[k]} ${c}`));
+        cells.forEach((c, k) => c && (lastRow[k] = join(lastRow[k], c)));
         mark(line, "row", rows.length - 1);
         return;
       }
@@ -385,24 +432,31 @@ function tableFrom(pageLines: Line[][], pages: PageText[], fontSize: number): Ta
         // The header is the first grid line if it has no numbers, otherwise the
         // line right above it (header labels are often wider than the data).
         const above = lines[i - 1];
-        if (cells.every((c) => !/\d/.test(c) || PERIOD.test(c))) {
+        if (cells.every(isLabel) && cells.some((c) => /\p{L}/u.test(c) || PERIOD.test(c))) {
           // Header labels can wrap over several lines ("Quantity" / "on hand" / "(units)"): fold label-only lines
           // right above and below into the header. Lines set closer than the rows are one header even when wordy.
           const gaps = lines.slice(1).map((l, k) => lines[k].y - l.y).sort((a, b) => a - b);
           const pitch = gaps[Math.floor(gaps.length / 2)] ?? line.h * 2;
+          // A label line is set in the header's own type size, closer than the rows are to each other: a text-only
+          // first row ("Ava  Germany  Paid") sits a full row away, and a page title is set larger.
           const labelLine = (l: Line | undefined, next: Line) => {
-            if (!l || Math.abs(l.y - next.y) >= next.h * 1.8 || !onGrid(l, cols) || l.words.some((w) => /\d/.test(w.text) && !PERIOD.test(w.text))) return false;
-            return l.words.length <= cols.length || Math.abs(l.y - next.y) < pitch * 0.85;
+            if (!l || !onGrid(l, cols) || !rowOf(l, cols).every(isLabel)) return false;
+            const gap = Math.abs(l.y - next.y);
+            const partial = rowOf(l, cols).filter(Boolean).length < minFilled;
+            return gap < next.h * 1.8 && (partial || gap < pitch * 0.85) && l.h < next.h * 1.25 && l.h > next.h * 0.8;
           };
           header = cells;
           let top = line;
-          for (let k = i - 1; k >= 0 && labelLine(lines[k], top) && lines[k].words.length <= cols.length; k--) {
+          // Above the header only a label in the header's own tight spacing counts; a subtitle is a paragraph away.
+          for (let k = i - 1; k >= 0 && labelLine(lines[k], top) && top.y - lines[k].y > -pitch * 0.85 && lines[k].y - top.y < pitch * 0.85 && !bridges(lines[k], cols); k--) {
             top = lines[k];
             header = rowOf(top, cols).map((c, n) => [c, header![n]].filter(Boolean).join(" "));
             const last = marks.at(-1);
             if (last && last.page === page && last.y === top.y) last.kind = "header";
           }
-          for (let k = i + 1, bottom = line; labelLine(lines[k], bottom); bottom = lines[k++]) {
+          // …but not the first half of a wrapped cell, which sits nearer to its own row than to the header.
+          const ownRow = (k: number) => full(lines[k + 1]) && lines[k].y - lines[k + 1].y < lines[k - 1].y - lines[k].y;
+          for (let k = i + 1, bottom = line; labelLine(lines[k], bottom) && !ownRow(k); bottom = lines[k++]) {
             header = header.map((c, n) => [c, rowOf(lines[k], cols)[n]].filter(Boolean).join(" "));
             headerTail.add(lines[k]);
           }
@@ -416,7 +470,8 @@ function tableFrom(pageLines: Line[][], pages: PageText[], fontSize: number): Ta
         } else header = cols.map((_, k) => `Column ${k + 1}`);
       }
       mark(line, "row", rows.length);
-      rows.push(cells);
+      rows.push(prefix ? cells.map((c, k) => join(prefix![k], c)) : cells);
+      prefix = null;
       source.push({ page });
     });
   });
@@ -426,21 +481,70 @@ function tableFrom(pageLines: Line[][], pages: PageText[], fontSize: number): Ta
   const key = headers.map(norm).join("|");
   const keep = rows.map((r, k) => (r.map(norm).join("|") === key ? -1 : k)).filter((k) => k >= 0);
   const repeated = new Set(rows.map((_, k) => k).filter((k) => !keep.includes(k)));
-  // A "column" no row writes in and with no label of its own came from header words alone.
-  const blank = headers.map((h, c) => /^Column \d+$/.test(h) && keep.length >= 2 && keep.every((k) => !rows[k][c]));
+  // A "column" no row writes in came from header words alone: a label wider than its column ("Precio" over
+  // right-aligned prices headed "Precio unitario") joins the nearest column, an empty one is dropped.
+  const names = [...headers];
+  const blank = headers.map((_, c) => keep.length >= 2 && keep.every((k) => !rows[k][c]));
+  blank.forEach((b, c) => {
+    if (!b || /^Column \d+$/.test(names[c])) return;
+    const gap = (a: number, z: number) => (cols[a] && cols[z] && !blank[a === c ? z : a] ? cols[z][0] - cols[a][1] : Infinity);
+    const [left, right] = [gap(c - 1, c), gap(c, c + 1)];
+    if (left === Infinity && right === Infinity) return (blank[c] = false);
+    const n = left <= right ? c - 1 : c + 1;
+    names[n] = n < c ? `${names[n]} ${names[c]}` : `${names[c]} ${names[n]}`.replace(/ Column \d+$/, "");
+  });
   if (blank.some(Boolean)) {
     const pick = <T,>(r: T[]) => r.filter((_, c) => !blank[c]);
-    return finish(pick(headers), rows.map(pick), pick(cols));
+    return finish(pick(names.map((h, k) => (/^Column \d+$/.test(h) ? `Column ${pick(names).indexOf(h) + 1}` : h))), rows.map(pick), pick(cols));
   }
   return finish(headers, rows, cols);
 
   function finish(headers: string[], rows: string[][], cols: [number, number][]): Table {
-  const total = new Set(keep.filter((k) => TOTAL.test(rows[k].find(Boolean) ?? "") && rows[k].some((c) => /\d/.test(c))));
+  const total = totalRows(rows, keep);
   const data = keep.filter((k) => !total.has(k));
   const lines = marks.map(({ row, ...m }) => (row === undefined ? m : repeated.has(row) ? { ...m, kind: "header" as const } : total.has(row) ? { ...m, kind: "total" as const } : m));
   return { headers, rows: data.map((k) => rows[k]), source: data.map((k) => source[k]), totals: [...total].map((k) => rows[k]), layout: { columns: cols, lines } };
   }
 }
+
+/**
+ * Subtotal and total lines. A bare label ("Total", "Grand total", "Toplam:") is one; a longer one
+ * ("Subtotal North", but not the product "Total Care Shampoo") only when a figure on it is the sum of
+ * the rows above it, since the last subtotal or since the start.
+ */
+function totalRows(rows: string[][], order: number[]): Set<number> {
+  const decimal = decimalOf(rows.flat());
+  const out = new Set<number>();
+  const cols = rows[0]?.length ?? 0;
+  const part = new Array(cols).fill(0), all = new Array(cols).fill(0);
+  for (const k of order) {
+    const label = rows[k].find(Boolean) ?? "";
+    const figures = rows[k].map((c) => toNumber(c, decimal));
+    if (TOTAL.test(label) && figures.some((n) => n !== null)) {
+      const bare = TOTAL_ONLY.test(label.trim());
+      const adds = figures.some((n, c) => n !== null && n !== 0 && (Math.abs(n - part[c]) < 0.005 || Math.abs(n - all[c]) < 0.005));
+      if (bare || adds) {
+        out.add(k);
+        part.fill(0);
+        continue;
+      }
+    }
+    figures.forEach((n, c) => n !== null && ((part[c] += n), (all[c] += n)));
+  }
+  return out;
+}
+
+/** A header label: text, a period ("2026"), or empty; "Units 2" and "VAT 20%" are labels, "1,250.00" is not. */
+const isLabel = (c: string) => !c || PERIOD.test(c) || (/\p{L}/u.test(c) && !isFigure(c) && !toDate(c));
+
+/** True when two words in one text run, an ordinary space apart, land in different columns. */
+function bridges(l: Line, cols: [number, number][], times = 1): boolean {
+  const col = (w: Word) => cols.findIndex(([a, b]) => (w.x0 + w.x1) / 2 >= a - 1.5 && (w.x0 + w.x1) / 2 <= b + 1.5);
+  return l.words.filter((w, i) => i > 0 && w.glued && col(w) !== col(l.words[i - 1]) && !isFigure(w.text) && !isFigure(l.words[i - 1].text)).length >= times;
+}
+
+/** Joins the parts of a wrapped cell; a break after a hyphen ("K-" / "64356", "well-" / "known") adds no space. */
+const join = (a: string, b: string) => (!a ? b : !b ? a : /\p{L}-$/u.test(a) ? a + b : `${a} ${b}`);
 
 /** A wrapped cell continues text; a cell under a figure is a new line (a subtotal, a second amount). */
 const isFigure = (s: string) => toNumber(s) !== null || toNumber(s, ",") !== null;
@@ -449,6 +553,9 @@ const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 
 /** A period used as a column label in financial statements: "2026", "FY2025", "Q3 2026", "2025/26", "31.12.2026". */
 const PERIOD = /^(?:(?:FY|Q[1-4]|H[12])\s?)?(?:19|20)\d{2}(?:[-/](?:\d{2}|(?:19|20)\d{2}))?$|^\d{1,2}[./]\d{1,2}[./](?:19|20)\d{2}$/i;
+
+/** A label that is nothing but "Total" in one of the covered languages, with an optional colon or currency. */
+const TOTAL_ONLY = /^(?:sub-?total|total|totals|grand total|sum|summe|zwischensumme|gesamt\w*|endsumme|toplam|ara toplam|genel toplam|sous-total|total général|totale|subtotale|totaal|subtotaal|razem|suma|合計|小計)\s*(?:\([^)]*\))?:?$/i;
 
 /** First cell of a subtotal or total line, in the languages the samples cover. */
 const TOTAL = /^(?:sub-?total|total|totals|grand total|sum|summe|zwischensumme|gesamt\w*|endsumme|toplam|ara toplam|genel toplam|sous-total|total général|totale|subtotale|totaal|subtotaal|razem|suma|合計|小計)\b/i;
@@ -479,7 +586,8 @@ export function columnKinds(t: Table): ColumnKind[] {
     const own = decimalOf(values);
     // A column of "1.234" alone does not say which mark is the decimal: the rest of the document does.
     const decimal = values.some((v) => /\d[.,]\d{1,2}(?!\d)|\d[.,]\d{3}[.,]\d/.test(v)) ? own : all;
-    const order = dateOrderOf(values);
+    const settled = dateOrderOf(values);
+    const order = settled ?? "dmy";
     const base = { decimal, order };
     if (!values.length) return { kind: "text", ...base };
     if (values.every((v) => toNumber(v, decimal) !== null)) {
@@ -489,7 +597,7 @@ export function columnKinds(t: Table): ColumnKind[] {
       if (!id && !counter && !/^(no|#|id|order|index|row)\b/i.test(h.trim())) return { kind: values.every(isPercent) ? "percent" : "number", ...base };
       return { kind: "text", ...base };
     }
-    if (values.every((v) => toDate(v, order))) return { kind: "date", ...base };
+    if (settled && values.every((v) => toDate(v, order))) return { kind: "date", ...base };
     return { kind: "text", ...base };
   });
 }
