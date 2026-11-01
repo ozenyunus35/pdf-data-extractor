@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types tests/extract.test.ts",
+    "test": "node --experimental-strip-types --no-warnings tests/values.test.ts && node --experimental-strip-types --no-warnings tests/extract.test.ts && node --experimental-strip-types --no-warnings tests/stress.test.ts && node --experimental-strip-types --no-warnings tests/export.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

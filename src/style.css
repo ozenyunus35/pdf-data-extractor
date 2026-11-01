@@ -173,6 +173,7 @@ tfoot td:first-child { color: var(--muted); font-weight: 500; }
 .legend i { width: 10px; height: 10px; border-radius: 2px; }
 .k-header { background: rgb(var(--k-header) / .35); box-shadow: inset 0 0 0 1px rgb(var(--k-header)); }
 .k-row { background: rgb(var(--k-row) / .25); box-shadow: inset 0 0 0 1px rgb(var(--k-row) / .8); }
+.k-total { background: rgb(196 132 29 / .25); box-shadow: inset 0 0 0 1px rgb(196 132 29 / .8); }
 .k-skipped { background: repeating-linear-gradient(135deg, rgb(var(--k-skipped) / .5) 0 2px, transparent 2px 4px); box-shadow: inset 0 0 0 1px rgb(var(--k-skipped) / .7); }
 .k-col { border-left: 1px dashed var(--accent); border-right: 1px dashed var(--accent); border-radius: 0 !important; }
 .page-wrap { flex: 1; overflow: auto; padding: 20px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); display: flex; justify-content: center; }
@@ -183,6 +184,8 @@ tfoot td:first-child { color: var(--muted); font-weight: 500; }
 .page svg .header { fill: rgb(91 91 214 / .22); stroke: rgb(91 91 214); stroke-width: 1; }
 .page svg .row { fill: rgb(47 143 91 / .14); stroke: rgb(47 143 91 / .7); stroke-width: .75; cursor: pointer; }
 .page svg .row:hover { fill: rgb(47 143 91 / .32); }
+.page svg rect { vector-effect: non-scaling-stroke; }
+.page svg .total { fill: rgb(196 132 29 / .16); stroke: rgb(196 132 29 / .8); stroke-width: .75; }
 .page svg .skipped { fill: url(#hatch); stroke: rgb(120 124 132 / .8); stroke-width: .75; }
 
 .foot { margin-top: 20px; color: var(--faint); font-size: 12px; }
@@ -201,3 +204,13 @@ tfoot td:first-child { color: var(--muted); font-weight: 500; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* Password prompt */
+dialog#pw { border: 1px solid var(--border); border-radius: 12px; padding: 20px; width: min(380px, calc(100vw - 32px)); background: var(--surface); color: var(--text); box-shadow: var(--pop); }
+dialog#pw::backdrop { background: rgb(0 0 0 / .35); }
+dialog#pw h2 { font-size: 16px; margin: 0 0 6px; }
+dialog#pw p { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+dialog#pw input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-strong); font: inherit; background: var(--surface-2); color: var(--text); }
+dialog#pw .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.check-ok { color: var(--success); }
+.check-bad { color: var(--warning); }

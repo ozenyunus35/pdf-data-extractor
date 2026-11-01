@@ -1,0 +1,234 @@
+[
+ {
+  "name": "de-eu-numbers",
+  "expect": {
+   "headers": [
+    "Datum",
+    "Filiale",
+    "Artikel",
+    "Menge",
+    "Einzelpreis",
+    "Betrag"
+   ],
+   "rows": 40,
+   "numeric": [
+    "Menge",
+    "Einzelpreis",
+    "Betrag"
+   ],
+   "cell": [
+    0,
+    5,
+    "6.497,76 €"
+   ]
+  }
+ },
+ {
+  "name": "tr-statement",
+  "expect": {
+   "headers": [
+    "Tarih",
+    "Açıklama",
+    "Tutar (TL)",
+    "Bakiye (TL)"
+   ],
+   "rows": 30,
+   "numeric": [
+    "Tutar (TL)",
+    "Bakiye (TL)"
+   ],
+   "sum": [
+    2,
+    10201.030000000002
+   ]
+  }
+ },
+ {
+  "name": "fr-spaces",
+  "expect": {
+   "headers": [
+    "Agence",
+    "Produit",
+    "Montant HT",
+    "Marge"
+   ],
+   "rows": 25,
+   "numeric": [
+    "Montant HT",
+    "Marge"
+   ]
+  }
+ },
+ {
+  "name": "us-ledger-signs",
+  "expect": {
+   "headers": [
+    "Account",
+    "Category",
+    "Amount",
+    "Share"
+   ],
+   "rows": 30,
+   "numeric": [
+    "Amount",
+    "Share"
+   ]
+  }
+ },
+ {
+  "name": "ids-leading-zeros",
+  "expect": {
+   "headers": [
+    "Account",
+    "ZIP",
+    "Card Number",
+    "Balance"
+   ],
+   "rows": 20,
+   "numeric": [
+    "Balance"
+   ],
+   "cell": [
+    0,
+    0,
+    "000012"
+   ]
+  }
+ },
+ {
+  "name": "sparse-columns",
+  "expect": {
+   "headers": [
+    "SKU",
+    "Item",
+    "Qty",
+    "Discount",
+    "Note",
+    "Line Total"
+   ],
+   "rows": 30
+  }
+ },
+ {
+  "name": "year-headers",
+  "expect": {
+   "headers": [
+    "Column 1",
+    "2026",
+    "2025"
+   ],
+   "rows": 9,
+   "numeric": [
+    "2026",
+    "2025"
+   ]
+  }
+ },
+ {
+  "name": "subtotals",
+  "expect": {
+   "headers": [
+    "Region",
+    "Rep",
+    "Sales"
+   ],
+   "rows": 18
+  }
+ },
+ {
+  "name": "two-tables",
+  "expect": {
+   "headers": [
+    "Invoice",
+    "Customer",
+    "Date",
+    "Status",
+    "Amount"
+   ],
+   "rows": 35
+  }
+ },
+ {
+  "name": "wide-landscape",
+  "expect": {
+   "headers": [
+    "Store",
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Total"
+   ],
+   "rows": 22
+  },
+  "landscape": true
+ },
+ {
+  "name": "long-2400",
+  "expect": {
+   "headers": [
+    "No",
+    "Date",
+    "Method",
+    "Category",
+    "Amount"
+   ],
+   "rows": 2400
+  }
+ },
+ {
+  "name": "three-line-header",
+  "expect": {
+   "headers": [
+    "Part Number (internal)",
+    "Quantity on hand (units)",
+    "Unit cost (USD)",
+    "Extended value (USD)"
+   ],
+   "rows": 15
+  }
+ },
+ {
+  "name": "date-formats",
+  "expect": {
+   "headers": [
+    "Date",
+    "Event",
+    "Ticket"
+   ],
+   "rows": 18
+  }
+ },
+ {
+  "name": "ja-yen",
+  "expect": {
+   "headers": [
+    "店舗",
+    "商品",
+    "数量",
+    "金額"
+   ],
+   "rows": 12,
+   "numeric": [
+    "数量",
+    "金額"
+   ]
+  }
+ },
+ {
+  "name": "formula-cells",
+  "expect": {
+   "headers": [
+    "Description",
+    "Amount"
+   ],
+   "rows": 6
+  }
+ }
+]

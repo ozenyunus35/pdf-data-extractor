@@ -49,6 +49,10 @@
 
         <section class="block" id="export-block">
           <h2 class="label">Export</h2>
+          <label class="field" id="table-field" hidden>
+            <span>Table</span>
+            <select id="table-pick"></select>
+          </label>
           <label class="field">
             <span>Split into sheets by</span>
             <select id="split"></select>
@@ -100,6 +104,7 @@
             <ul class="legend">
               <li><i class="k-header"></i>Header</li>
               <li><i class="k-row"></i>Data row</li>
+              <li><i class="k-total"></i>Total line</li>
               <li><i class="k-skipped"></i>Skipped</li>
               <li><i class="k-col"></i>Column</li>
             </ul>
@@ -117,6 +122,17 @@
         </footer>
       </main>
     </div>
+    <dialog id="pw" aria-labelledby="pw-title">
+      <form method="dialog">
+        <h2 id="pw-title">Password required</h2>
+        <p id="pw-text"></p>
+        <input type="password" id="pw-input" autocomplete="off" aria-label="PDF password" />
+        <div class="actions">
+          <button type="submit" class="btn" value="cancel" formnovalidate>Skip file</button>
+          <button type="submit" class="btn primary" value="ok">Open</button>
+        </div>
+      </form>
+    </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

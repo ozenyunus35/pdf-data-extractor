@@ -2,19 +2,15 @@
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import { pageText, type RawItem } from "../src/frame.ts";
 import { extractTable, splitCandidates, numericColumns, type PageText } from "../src/table.ts";
 
 async function load(path: string): Promise<PageText[]> {
   const doc = await pdfjs.getDocument({ data: new Uint8Array(readFileSync(path)) }).promise;
   const pages: PageText[] = [];
   for (let p = 1; p <= doc.numPages; p++) {
-    const tc = await (await doc.getPage(p)).getTextContent();
-    pages.push({
-      page: p,
-      items: (tc.items as any[]).filter((i) => "str" in i).map((i) => ({
-        str: i.str, x: i.transform[4], y: i.transform[5], width: i.width, height: i.height,
-      })),
-    });
+    const page = await doc.getPage(p);
+    pages.push(pageText(p, (await page.getTextContent()).items as RawItem[], page.getViewport({ scale: 1 })));
   }
   return pages;
 }
@@ -62,6 +58,7 @@ assert.deepEqual(st.rows[0], ["20.10.2026", "F24311", "MESSAGE FEE AMOUNT", "-0,
 const de = extractTable(await load("tests/fixtures/invoice-de.pdf"))!;
 assert.deepEqual(de.headers, ["BESCHREIBUNG", "MENGE", "EINZELPREIS", "BETRAG"]);
 assert.equal(de.rows.length, 3, "invoice line items");
+assert.equal(de.rows[0][0], "Kaffeebohnen Espresso, 1 kg", "the ff ligature stays inside its word");
 
 // A report: a title and a paragraph above the table, notes wrapping inside cells.
 const rep = extractTable(await load("tests/fixtures/report-wrapped.pdf"))!;
