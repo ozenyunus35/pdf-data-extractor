@@ -36,6 +36,8 @@ Files are processed locally with PDF.js. Nothing is uploaded to a server.
 | Table and sheet tabs | Detection view |
 | --- | --- |
 | ![Extracted table split by store](docs/home.png) | ![PDF page with detected rows highlighted](docs/result.png) |
+| **In Turkish** | **Command palette** |
+| ![Membership register extracted, interface in Turkish](docs/turkish.png) | ![Command palette choosing the column to split sheets by](docs/palette.png) |
 
 ## How the table detection works
 
