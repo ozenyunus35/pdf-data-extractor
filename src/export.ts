@@ -1,6 +1,7 @@
 import type ExcelJS from "exceljs";
 import { numberIn, PER_UNIT, type ColumnKind, type Table } from "./table.ts";
 import { toDate } from "./values.ts";
+import { tKnown } from "./i18n.ts";
 
 export interface ExportOptions {
   splitBy: number | null; // column index
@@ -76,12 +77,12 @@ export async function buildWorkbook(d: Dataset, o: ExportOptions): Promise<Blob>
   const { default: Excel } = await import("exceljs");
   const wb = new Excel.Workbook();
   wb.creator = "PDF to Excel Extractor";
-  const headers = o.sourceColumns ? [...d.headers, "Source file", "Page"] : d.headers;
+  const headers = o.sourceColumns ? [...d.headers, tKnown("Source file"), tKnown("Page")] : d.headers;
   const all = d.rows.map((_, i) => i);
   const used = new Set<string>();
 
   if (o.summary && o.splitBy !== null) addSummary(wb, d, o, used);
-  addTableSheet(wb, sheetName("All records", used), headers, tableRows(d, all, o), o);
+  addTableSheet(wb, sheetName(tKnown("All records"), used), headers, tableRows(d, all, o), o);
 
   if (o.splitBy !== null) {
     const col = o.splitBy;
@@ -103,15 +104,15 @@ function addSummary(wb: ExcelJS.Workbook, d: Dataset, o: ExportOptions, used: Se
   const col = o.splitBy!;
   // Totals only make sense for quantities and amounts, not for prices or rates.
   const sums = o.kinds.map((k, c) => (k.kind === "number" && c !== col && !PER_UNIT.test(d.headers[c]) ? c : -1)).filter((c) => c >= 0);
-  const headers = [d.headers[col], "Records", ...sums.map((c) => (/^total\b/i.test(d.headers[c]) ? d.headers[c] : `Total ${d.headers[c]}`))];
+  const headers = [d.headers[col], tKnown("Records"), ...sums.map((c) => (/^total\b/i.test(d.headers[c]) ? d.headers[c] : `${tKnown("Total")} ${d.headers[c]}`))];
   const rows: (string | number)[][] = groups(d, col).map(([value, idx]) => [
     value || "(blank)",
     idx.length,
     ...sums.map((c) => round(idx.reduce((s, i) => s + (numberIn(o.kinds[c], d.rows[i][c]) ?? 0), 0))),
   ]);
-  const total: (string | number)[] = ["Total", d.rows.length, ...sums.map((_, k) => round(rows.reduce((s, r) => s + (r[k + 2] as number), 0)))];
+  const total: (string | number)[] = [tKnown("Total"), d.rows.length, ...sums.map((_, k) => round(rows.reduce((s, r) => s + (r[k + 2] as number), 0)))];
 
-  const ws = wb.addWorksheet(sheetName("Summary", used), { views: [{ state: "frozen", ySplit: 1 }] });
+  const ws = wb.addWorksheet(sheetName(tKnown("Summary"), used), { views: [{ state: "frozen", ySplit: 1 }] });
   ws.addRow(headers);
   rows.forEach((r) => ws.addRow(r));
   const t = ws.addRow(total);
@@ -130,7 +131,7 @@ const round = (n: number) => Math.round(n * 100) / 100;
 export function buildCsv(d: Dataset, o: ExportOptions, locale = "en-US"): Blob {
   const comma = (1.5).toLocaleString(locale).includes(",");
   const sep = comma ? ";" : ",";
-  const headers = o.sourceColumns ? [...d.headers, "Source file", "Page"] : d.headers;
+  const headers = o.sourceColumns ? [...d.headers, tKnown("Source file"), tKnown("Page")] : d.headers;
   const text = (v: Cell) => {
     if (v instanceof Date) return v.toISOString().slice(0, 10);
     if (typeof v === "number") return comma ? String(v).replace(".", ",") : String(v);

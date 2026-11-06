@@ -3,6 +3,7 @@ import { PdfError, readPdf, renderPage } from "./pdf";
 import { columnKinds, extractTables, numberIn, PER_UNIT, splitCandidates, type ColumnKind, type Layout, type Table } from "./table";
 import { buildWorkbook, buildCsv, groups, type Dataset } from "./export";
 import { displayMatrix, readingHeight, type Frame } from "./frame";
+import { applyStatic, lang, setLang, t, t as tt } from "./i18n";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const drop = $("drop"), input = $<HTMLInputElement>("file"), status = $("status");
@@ -52,7 +53,7 @@ drop.addEventListener("drop", (e) => {
   drop.classList.remove("over");
   const pdfs = [...(e.dataTransfer?.files ?? [])].filter((f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
   if (pdfs.length) handle(pdfs);
-  else setStatus("Please drop PDF files.", true);
+  else setStatus(t("Please drop PDF files."), true);
 });
 
 document.querySelectorAll<HTMLButtonElement>("[data-sample]").forEach((b) => b.addEventListener("click", () => loadSample(b.dataset.sample!)));
@@ -82,7 +83,7 @@ function setStep(step: string | null) {
 /** Asks for a PDF's password; null when the person skips the file. */
 function askPassword(name: string, wrong: boolean): Promise<string | null> {
   const dialog = $<HTMLDialogElement>("pw"), input = $<HTMLInputElement>("pw-input");
-  $("pw-text").textContent = wrong ? `That password did not open ${name}. Try again.` : `${name} is protected. Its password stays in this browser tab.`;
+  $("pw-text").textContent = wrong ? t("That password did not open {name}. Try again.", { name }) : t("{name} is protected. Its password stays in this browser tab.", { name });
   input.value = "";
   dialog.returnValue = "";
   dialog.showModal();
@@ -152,15 +153,15 @@ async function handle(list: File[]) {
   if (!merged.rows.length) {
     setStep(null);
     const all = (reason: string) => loaded.length > 0 && loaded.every((f) => f.skipped === reason);
-    const names = loaded.filter((f) => f.skipped && f.skipped !== "no table found").map((f) => `${f.name} (${f.skipped})`).join(", ");
+    const names = loaded.filter((f) => f.skipped && f.skipped !== "no table found").map((f) => `${f.name} (${t(f.skipped!)})`).join(", ");
     setStatus(
       all("scanned image, no text layer")
-        ? "This PDF is a scanned image with no selectable text, so there is no table to read. For scans and photos, try Tally, which runs OCR in the browser: ozenyunus35.github.io/invoice-extractor"
+        ? t("This PDF is a scanned image with no selectable text, so there is no table to read. For scans and photos, try Tally, which runs OCR in the browser: ozenyunus35.github.io/invoice-extractor")
         : all("password protected")
-          ? "This PDF is password protected. Open it again and enter its password to read the table."
+          ? t("This PDF is password protected. Open it again and enter its password to read the table.")
           : names && loaded.every((f) => f.skipped !== "no table found")
-            ? `Could not open: ${names}. Choose a PDF file that opens in a PDF viewer.`
-            : "No table was found. This works with digital PDFs whose text can be selected.",
+            ? t("Could not open: {names}. Choose a PDF file that opens in a PDF viewer.", { names })
+            : t("No table was found. This works with digital PDFs whose text can be selected."),
       true,
     );
     return;
@@ -173,11 +174,11 @@ async function handle(list: File[]) {
   baseName = list.length === 1 ? list[0].name.replace(/\.pdf$/i, "") : "merged-tables";
   setStep("done");
   const skipped = loaded.filter((f) => f.skipped);
-  setStatus([skipped.length ? `Skipped: ${skipped.map((f) => `${f.name} (${f.skipped})`).join(", ")}.` : "", totalsNote(data)].filter(Boolean).join(" "));
+  setStatus([skipped.length ? t("Skipped: {list}.", { list: skipped.map((f) => `${f.name} (${t(f.skipped!)})`).join(", ") }) : "", totalsNote(data)].filter(Boolean).join(" "));
   // One file with several tables: let the person pick which one to export.
   const own = loaded.length === 1 ? loaded[0].tables : [];
   $("table-field").hidden = own.length < 2;
-  tablePick.innerHTML = own.map((t, k) => `<option value="${k}">${esc(t.headers.slice(0, 3).join(", "))}${t.headers.length > 3 ? "…" : ""} · ${t.rows.length} rows</option>`).join("");
+  tablePick.innerHTML = own.map((t, k) => `<option value="${k}">${esc(t.headers.slice(0, 3).join(", "))}${t.headers.length > 3 ? "…" : ""} · ${tt("{n} rows", { n: t.rows.length })}</option>`).join("");
   render(list.length, pages, Math.round(performance.now() - t0));
   setTimeout(() => setStep(null), 1400);
 }
@@ -200,7 +201,7 @@ tablePick.addEventListener("change", () => {
 function totalsNote(d: Dataset): string {
   const totals = d.totals ?? [];
   if (!totals.length) return "";
-  const lines = `${totals.length} total line${totals.length > 1 ? "s" : ""} from the PDF ${totals.length > 1 ? "are" : "is"} set aside, so nothing is counted twice.`;
+  const lines = t(totals.length > 1 ? "{n} total lines from the PDF are set aside, so nothing is counted twice." : "{n} total line from the PDF is set aside, so nothing is counted twice.", { n: totals.length });
   if (files.length !== 1) return lines;
   const k = columnKinds(d);
   const grand = totals.at(-1)!;
@@ -209,7 +210,7 @@ function totalsNote(d: Dataset): string {
     .filter((x) => x.printed !== null)
     .map(({ c, i, printed }) => {
       const sum = d.rows.reduce((s, r) => s + (numberIn(c, r[i]) ?? 0), 0);
-      return Math.abs(sum - printed!) < 0.005 ? `The rows add up to the PDF's total for ${d.headers[i]} ✓` : "";
+      return Math.abs(sum - printed!) < 0.005 ? t("The rows add up to the PDF's total for {column} ✓", { column: d.headers[i] }) : "";
     })
     .filter(Boolean);
   return [lines, ...checks].join(" ");
@@ -219,7 +220,7 @@ function renderFiles() {
   $("files").innerHTML = files
     .map(
       (f) =>
-        `<li class="file"><span class="file-ico" aria-hidden="true">PDF</span><span><b>${esc(f.name)}</b><small>${f.pages} page${f.pages === 1 ? "" : "s"} · ${f.skipped ? esc(f.skipped) : `${f.rows} rows`}</small></span></li>`,
+        `<li class="file"><span class="file-ico" aria-hidden="true">PDF</span><span><b>${esc(f.name)}</b><small>${t(f.pages === 1 ? "{n} page" : "{n} pages", { n: f.pages })} · ${f.skipped ? esc(t(f.skipped)) : t("{n} rows", { n: f.rows })}</small></span></li>`,
     )
     .join("");
 }
@@ -227,11 +228,11 @@ function renderFiles() {
 /* Result */
 function render(fileCount: number, pages: number, ms: number) {
   const d = data!;
-  $("doc-title").textContent = fileCount === 1 ? files[0].name : `${fileCount} files merged`;
-  $("meta").textContent = `${pages} page${pages === 1 ? "" : "s"} · ${d.rows.length} row${d.rows.length === 1 ? "" : "s"} · ${d.headers.length} columns · extracted in ${ms} ms`;
+  $("doc-title").textContent = fileCount === 1 ? files[0].name : t("{n} files merged", { n: fileCount });
+  $("meta").textContent = [t(pages === 1 ? "{n} page" : "{n} pages", { n: pages }), t(d.rows.length === 1 ? "{n} row" : "{n} rows", { n: d.rows.length }), t("{n} columns", { n: d.headers.length }), t("extracted in {n} ms", { n: ms })].join(" · ");
 
   const cands = splitCandidates(d);
-  split.innerHTML = `<option value="">Don't split</option>` + cands.map((c) => `<option value="${c.index}">${esc(d.headers[c.index])} (${c.unique} sheets)</option>`).join("");
+  split.innerHTML = `<option value="">${t("Don't split")}</option>` + cands.map((c) => `<option value="${c.index}">${esc(d.headers[c.index])} (${t("{n} sheets", { n: c.unique })})</option>`).join("");
   split.value = cands.length ? String(cands[0].index) : "";
   syncOptions();
   renderTable();
@@ -267,15 +268,15 @@ function renderTable() {
   const shown = idx.slice(0, 250);
 
   const head = `<thead><tr><th class="idx" scope="col">#</th>${d.headers
-    .map((h, i) => (types[i] === "num" ? `<th scope="col" class="num">${esc(h)}<span class="type" title="Number">${icon.num}</span></th>` : `<th scope="col"><span class="type" title="${types[i] === "date" ? "Date" : "Text"}">${icon[types[i] as "date" | "text"]}</span>${esc(h)}</th>`))
+    .map((h, i) => (types[i] === "num" ? `<th scope="col" class="num">${esc(h)}<span class="type" title="${t("Number")}">${icon.num}</span></th>` : `<th scope="col"><span class="type" title="${types[i] === "date" ? t("Date") : t("Text")}">${icon[types[i] as "date" | "text"]}</span>${esc(h)}</th>`))
     .join("")}</tr></thead>`;
   const body = shown
     .map((r) => `<tr data-row="${r}"><td class="idx">${r + 1}</td>${d.rows[r].map((c, i) => `<td${types[i] === "num" ? ' class="num"' : ""}>${esc(c)}</td>`).join("")}</tr>`)
     .join("");
-  const more = idx.length > shown.length ? `<tr class="more"><td colspan="${d.headers.length + 1}">${idx.length - shown.length} more rows are in the export</td></tr>` : "";
+  const more = idx.length > shown.length ? `<tr class="more"><td colspan="${d.headers.length + 1}">${t("{n} more rows are in the export", { n: idx.length - shown.length })}</td></tr>` : "";
   const hasNums = types.includes("num");
   const foot = hasNums
-    ? `<tfoot><tr><td>Σ</td>${d.headers.map((_, i) => (types[i] === "num" ? `<td class="num">${total(d, idx, i)}</td>` : `<td>${i === 0 ? `${idx.length} rows` : ""}</td>`)).join("")}</tr></tfoot>`
+    ? `<tfoot><tr><td>Σ</td>${d.headers.map((_, i) => (types[i] === "num" ? `<td class="num">${total(d, idx, i)}</td>` : `<td>${i === 0 ? t("{n} rows", { n: idx.length }) : ""}</td>`)).join("")}</tr></tfoot>`
     : "";
   table.innerHTML = head + `<tbody>${body}${more}</tbody>` + foot;
   renderSheets();
@@ -284,12 +285,12 @@ function renderTable() {
 function renderSheets() {
   const d = data!;
   if (split.value === "") {
-    sheetsBar.innerHTML = `<button type="button" role="tab" aria-selected="true">All rows<small>${d.rows.length}</small></button>`;
+    sheetsBar.innerHTML = `<button type="button" role="tab" aria-selected="true">${t("All rows")}<small>${d.rows.length}</small></button>`;
     return;
   }
   const g = groups(d, Number(split.value));
   const tab = (name: string | null, label: string, n: number) => `<button type="button" role="tab" aria-selected="${sheet === name}" data-sheet="${name === null ? "" : esc(name)}">${esc(label)}<small>${n}</small></button>`;
-  sheetsBar.innerHTML = tab(null, "All rows", d.rows.length) + g.map(([name, rows]) => tab(name, name, rows.length)).join("") + (summary.checked ? `<button type="button" role="tab" aria-selected="false" disabled>Summary<small>sheet</small></button>` : "");
+  sheetsBar.innerHTML = tab(null, t("All rows"), d.rows.length) + g.map(([name, rows]) => tab(name, name, rows.length)).join("") + (summary.checked ? `<button type="button" role="tab" aria-selected="false" disabled>${t("Summary")}<small>${t("sheet")}</small></button>` : "");
 }
 
 sheetsBar.addEventListener("click", (e) => {
@@ -305,7 +306,7 @@ function syncOptions() {
   if (!data) return;
   const o = options();
   const n = o.splitBy === null ? 1 : 1 + groups(data, o.splitBy).length + (o.summary ? 1 : 0);
-  $("sheets-note").textContent = `Workbook: ${n} sheet${n > 1 ? "s" : ""}, frozen header, filters and number formats.`;
+  $("sheets-note").textContent = t(n > 1 ? "Workbook: {n} sheets, frozen header, filters and number formats." : "Workbook: {n} sheet, frozen header, filters and number formats.", { n });
 }
 split.addEventListener("change", () => {
   sheet = null;
@@ -324,10 +325,10 @@ function options() {
 $("xlsx").addEventListener("click", async () => {
   if (!data) return;
   const o = options();
-  setStatus("Building workbook…");
+  setStatus(t("Building workbook…"));
   download(await buildWorkbook(data, o), `${baseName}.xlsx`);
   const sheets = 1 + (o.splitBy !== null ? groups(data, o.splitBy).length + (o.summary ? 1 : 0) : 0);
-  setStatus(`Excel file ready: ${sheets} sheet${sheets > 1 ? "s" : ""}, ${data.rows.length} rows.`);
+  setStatus(t(sheets > 1 ? "Excel file ready: {n} sheets, {rows} rows." : "Excel file ready: {n} sheet, {rows} rows.", { n: sheets, rows: data.rows.length }));
 });
 $("csv").addEventListener("click", () => data && download(buildCsv(data, options(), navigator.language), `${baseName}.csv`));
 
@@ -360,7 +361,7 @@ async function renderDetect() {
   detectAt = Math.max(0, Math.min(detectAt, list.length - 1));
   const { fi, page } = list[detectAt];
   const f = files[fi];
-  $("page-label").textContent = `${files.length > 1 ? `${f.name} · ` : ""}Page ${page} of ${f.pages}`;
+  $("page-label").textContent = `${files.length > 1 ? `${f.name} · ` : ""}${t("Page {n} of {total}", { n: page, total: f.pages })}`;
   $<HTMLButtonElement>("prev").disabled = detectAt === 0;
   $<HTMLButtonElement>("next").disabled = detectAt === list.length - 1;
 
@@ -392,11 +393,11 @@ async function renderDetect() {
     onPage
       .map((l) => {
         const box = (cls: string, title: string, attrs = "") => rect(l.x0 - 3, l.y - l.h * 0.3, l.x1 + 3, l.y + l.h * 0.9, cls, title, attrs);
-        if (l.kind === "header") return box("header", "Header");
-        if (l.kind === "skipped") return box("skipped", "Skipped: not part of the table");
-        if (l.kind === "total") return box("total", "Total line: set aside, not counted twice");
+        if (l.kind === "header") return box("header", t("Header"));
+        if (l.kind === "skipped") return box("skipped", t("Skipped: not part of the table"));
+        if (l.kind === "total") return box("total", t("Total line: set aside, not counted twice"));
         const n = firstRow + rowNo++;
-        return box("row", `Row ${n + 1}`, `data-row="${n}"`);
+        return box("row", t("Row {n}", { n: n + 1 }), `data-row="${n}"`);
       })
       .join("") +
     "</g>";
@@ -427,6 +428,120 @@ window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
   resizeTimer = window.setTimeout(() => !$("view-detect").hidden && renderDetect(), 150);
 });
+
+/* Language */
+$("lang").addEventListener("click", () => {
+  setLang(lang === "tr" ? "en" : "tr");
+  if (data) {
+    const keep = { split: split.value, sheet };
+    render(files.length, files.reduce((s, f) => s + f.pages, 0), 0);
+    split.value = keep.split;
+    sheet = keep.sheet;
+    syncOptions();
+    renderTable();
+    setStatus(totalsNote(data));
+  }
+});
+
+/* ⌘K: load a sample, choose files, split by a column, export, switch view, theme or language. */
+interface Cmd {
+  group: string;
+  label: string;
+  hint?: string;
+  run: () => void;
+}
+let palItems: Cmd[] = [];
+let palIndex = 0;
+function commands(): Cmd[] {
+  const act = t("Actions");
+  const list: Cmd[] = [
+    { group: t("Samples"), label: t("Store orders Q3"), hint: t("5 pages · 5 stores · totals"), run: () => void loadSample("store-orders-q3.pdf") },
+    { group: t("Samples"), label: t("Membership register"), hint: t("3 pages · 4 branches"), run: () => void loadSample("membership-register.pdf") },
+    { group: act, label: t("Choose PDFs"), run: () => input.click() },
+    { group: t("View"), label: t("Table"), run: () => show("table") },
+    { group: t("View"), label: t("Detection"), run: () => show("detect") },
+  ];
+  if (data) {
+    for (const o of [...split.options])
+      list.push({
+        group: t("Split into sheets by"),
+        label: o.textContent ?? "",
+        run: () => {
+          split.value = o.value;
+          sheet = null;
+          syncOptions();
+          renderTable();
+        },
+      });
+    list.push({ group: act, label: t("Download Excel"), run: () => $("xlsx").click() }, { group: act, label: t("Download CSV"), run: () => $("csv").click() });
+  }
+  list.push(
+    { group: act, label: t("Switch theme"), run: () => $("theme").click() },
+    { group: act, label: lang === "tr" ? "Switch to English" : "Türkçeye geç", run: () => $("lang").click() },
+    { group: act, label: t("Source code on GitHub"), run: () => window.open("https://github.com/ozenyunus35/pdf-data-extractor", "_blank", "noopener") },
+  );
+  return list;
+}
+const fold = (x: string) => x.toLocaleLowerCase("tr").normalize("NFD").replace(/\p{M}/gu, "").replace(/ı/g, "i");
+function drawPalette() {
+  const words = fold(($("pal-q") as HTMLInputElement).value.trim()).split(/\s+/).filter(Boolean);
+  palItems = commands().filter((c) => words.every((w) => fold(`${c.label} ${c.group} ${c.hint ?? ""}`).includes(w)));
+  palIndex = Math.min(palIndex, Math.max(0, palItems.length - 1));
+  let last = "";
+  $("pal-list").innerHTML = palItems.length
+    ? palItems
+        .map((c, i) => {
+          const head = c.group !== last ? `<li class="pal-group" role="presentation">${esc(c.group)}</li>` : "";
+          last = c.group;
+          return `${head}<li role="option" id="pal-${i}" data-i="${i}" aria-selected="${i === palIndex}"><span>${esc(c.label)}</span>${c.hint ? `<small>${esc(c.hint)}</small>` : ""}</li>`;
+        })
+        .join("")
+    : `<li class="pal-empty">${t("No results")}</li>`;
+  $("pal-q").setAttribute("aria-activedescendant", `pal-${palIndex}`);
+  document.getElementById(`pal-${palIndex}`)?.scrollIntoView({ block: "nearest" });
+}
+function openPalette() {
+  ($("pal-q") as HTMLInputElement).value = "";
+  palIndex = 0;
+  drawPalette();
+  const d = $<HTMLDialogElement>("palette");
+  if (!d.open) d.showModal();
+  $("pal-q").focus();
+}
+function runPalette(i: number) {
+  const c = palItems[i];
+  if (!c) return;
+  $<HTMLDialogElement>("palette").close();
+  c.run();
+}
+$("open-palette").addEventListener("click", openPalette);
+window.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    openPalette();
+  }
+});
+$("pal-q").addEventListener("input", () => {
+  palIndex = 0;
+  drawPalette();
+});
+$("pal-q").addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    palIndex = Math.max(0, Math.min(palItems.length - 1, palIndex + (e.key === "ArrowDown" ? 1 : -1)));
+    drawPalette();
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    runPalette(palIndex);
+  }
+});
+$("pal-list").addEventListener("click", (e) => {
+  const li = (e.target as HTMLElement).closest<HTMLElement>("[data-i]");
+  if (li) runPalette(Number(li.dataset.i));
+});
+$("palette").addEventListener("click", (e) => e.target === $("palette") && $<HTMLDialogElement>("palette").close());
+
+applyStatic();
 
 // Open on a real result instead of an empty form.
 loadSample("store-orders-q3.pdf");

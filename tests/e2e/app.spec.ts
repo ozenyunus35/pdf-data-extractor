@@ -117,3 +117,31 @@ test("a turned landscape page is read and its rows are marked where they are dra
   const box = (await row.boundingBox())!;
   expect(box.height).toBeGreaterThan(box.width * 3);
 });
+
+test("the whole page works in Turkish", async ({ page }) => {
+  await page.goto("./?lang=tr");
+  await expect(page.getByRole("heading", { level: 1, name: "store-orders-q3.pdf" })).toBeVisible();
+  await expect(page.getByText(/5 sayfa · 120 satır · 7 sütun/)).toBeVisible();
+  await expect(page.getByText("Çalışma kitabı: 7 sayfa")).toBeVisible();
+  await page.getByRole("tab", { name: "Algılama" }).click();
+  await expect(page.getByText("Sayfa 1 / 5")).toBeVisible();
+  await page.getByRole("tab", { name: "Tablo" }).click();
+  await page.getByRole("button", { name: "Üyelik kaydı" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "membership-register.pdf" })).toBeVisible();
+  expect(await page.evaluate(() => [...((window as unknown as { __i18nMisses: Set<string> }).__i18nMisses ?? [])])).toEqual([]);
+  // Back to English with the switch; the choice is kept on reload.
+  await page.getByRole("button", { name: "Switch to English" }).click();
+  await expect(page.getByRole("tab", { name: "Detection" })).toBeVisible();
+});
+
+test("the command palette loads a sample and splits by a column", async ({ page }) => {
+  await page.getByRole("button", { name: "Search and commands" }).click();
+  const box = page.getByRole("combobox", { name: "Search commands" });
+  await box.fill("membership");
+  await box.press("Enter");
+  await expect(page.getByRole("heading", { level: 1, name: "membership-register.pdf" })).toBeVisible();
+  await page.getByRole("button", { name: "Search and commands" }).click();
+  await box.fill("don't split");
+  await box.press("Enter");
+  await expect(page.getByLabel("Split into sheets by")).toHaveValue("");
+});

@@ -28,6 +28,8 @@ Turn tables in PDF reports into clean, formatted Excel workbooks, right in the b
   are read upright and drawn in the right place in the detection view.
 - CSV that is safe to open: text starting with `=`, `+`, `-` or `@` cannot run as a formula, and on a
   decimal-comma locale (Turkish, German, French) fields are split by `;` so Excel opens them in columns.
+- **English and Turkish interface**, including status messages and the Excel sheet names and headers, and a ⌘K command
+  palette: load a sample, choose files, split by a column, switch view, export, theme or language.
 
 Files are processed locally with PDF.js. Nothing is uploaded to a server.
 
